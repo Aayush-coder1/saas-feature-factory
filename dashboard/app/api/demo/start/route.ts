@@ -1,15 +1,27 @@
 import { NextResponse } from "next/server";
-import { spawn } from "child_process";
-import { writeFileSync, existsSync, mkdirSync, readFileSync } from "fs";
+import { spawn, execSync } from "child_process";
+import { writeFileSync, existsSync, mkdirSync } from "fs";
 import { resolve } from "path";
 
-const PROJECT_ROOT = resolve(import.meta.dirname, "..", "..", "..", "..", "..");
+const PROJECT_ROOT = resolve(process.cwd(), "..");
 const BAND_STORE = resolve(PROJECT_ROOT, ".band_store");
 const STATE_FILE = resolve(BAND_STORE, "demo_state.json");
 
 function writeState(state: { running: boolean; startedAt: string; result?: string }) {
   if (!existsSync(BAND_STORE)) mkdirSync(BAND_STORE, { recursive: true });
   writeFileSync(STATE_FILE, JSON.stringify(state));
+}
+
+function findPython(): string {
+  for (const cmd of ["python", "python3", "py"]) {
+    try {
+      execSync(`${cmd} --version`, { stdio: "ignore" });
+      return cmd;
+    } catch {
+      continue;
+    }
+  }
+  return "python";
 }
 
 let demoProcess: ReturnType<typeof spawn> | null = null;
@@ -21,22 +33,23 @@ export async function POST() {
 
   try {
     const agentsDir = resolve(PROJECT_ROOT, "agents");
-    const pythonCmd = process.platform === "win32" ? "python" : "python3";
+    const pythonCmd = findPython();
+
+    if (!existsSync(agentsDir)) {
+      return NextResponse.json({ ok: false, error: `Agents dir not found: ${agentsDir}` }, { status: 500 });
+    }
 
     writeState({ running: true, startedAt: new Date().toISOString() });
 
     demoProcess = spawn(pythonCmd, ["-m", "agents.orchestrator.cli", "demo"], {
       cwd: agentsDir,
-      env: { ...process.env, PYTHONPATH: PROJECT_ROOT },
+      env: { ...process.env, PYTHONPATH: PROJECT_ROOT, PATH: process.env.PATH },
       stdio: ["ignore", "pipe", "pipe"],
     });
 
-    let output = "";
-    demoProcess.stdout?.on("data", (data: Buffer) => {
-      output += data.toString();
-    });
+    let stderrLog = "";
     demoProcess.stderr?.on("data", (data: Buffer) => {
-      output += data.toString();
+      stderrLog += data.toString();
     });
 
     demoProcess.on("close", (code: number | null) => {
@@ -44,8 +57,8 @@ export async function POST() {
       demoProcess = null;
     });
 
-    demoProcess.on("error", () => {
-      writeState({ running: false, startedAt: new Date().toISOString(), result: "Failed to start" });
+    demoProcess.on("error", (err: Error) => {
+      writeState({ running: false, startedAt: new Date().toISOString(), result: `Error: ${err.message}` });
       demoProcess = null;
     });
 

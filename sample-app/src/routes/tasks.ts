@@ -1,22 +1,11 @@
 import { Router, Request, Response } from 'express';
-import { exportTasksCSV } from '../services/exporter.js';
 import { db } from '../db/memory.js';
 
 const router = Router();
 
-router.get('/', (req: Request, res: Response) => {
-  const { label } = req.query;
-
-  if (label) {
-    const results = db.tasks.getByLabel(label as string);
-    res.json({ data: results, total: results.length, label });
-    return;
-  }
-
-  const page = parseInt(req.query.page as string) || 1;
-  const limit = parseInt(req.query.limit as string) || 20;
-  const result = db.tasks.getAll(page, limit);
-  res.json(result);
+router.get('/', (_req: Request, res: Response) => {
+  const tasks = db.tasks.getAll();
+  res.json({ data: tasks, total: tasks.length });
 });
 
 router.get('/:id', (req: Request, res: Response) => {
@@ -49,8 +38,6 @@ router.put('/:id', (req: Request, res: Response) => {
   }
   res.json({ data: task });
 });
-
-router.get('/export/csv', exportTasksCSV);
 
 router.delete('/:id', (req: Request, res: Response) => {
   const deleted = db.tasks.delete(req.params.id);

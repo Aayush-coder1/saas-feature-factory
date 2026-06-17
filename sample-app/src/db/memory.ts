@@ -32,26 +32,7 @@ seed();
 
 export const db = {
   tasks: {
-    getAll: (page: number = 1, limit: number = 20): { data: Task[]; total: number; page: number; limit: number; totalPages: number } => {
-      const all = Array.from(tasks.values());
-      const total = all.length;
-      const totalPages = Math.ceil(total / limit) || 1;
-      const start = (page - 1) * limit;
-      const data = all.slice(start, start + limit);
-      return { data, total, page, limit, totalPages };
-    },
-    search: (query: string): Task[] => {
-      const q = query.toLowerCase();
-      return Array.from(tasks.values()).filter(
-        t => t.title.toLowerCase().includes(q) || t.description.toLowerCase().includes(q)
-      );
-    },
-    getByLabel: (label: string): Task[] => {
-      return Array.from(tasks.values()).filter(t => t.labels?.includes(label));
-    },
-    getByLabel: (label: string): Task[] => {
-      return Array.from(tasks.values()).filter(t => t.labels?.includes(label));
-    },
+    getAll: (): Task[] => Array.from(tasks.values()),
     getById: (id: string): Task | undefined => tasks.get(id),
     create: (data: Omit<Task, 'id' | 'createdAt' | 'updatedAt'>): Task => {
       const now = new Date().toISOString();

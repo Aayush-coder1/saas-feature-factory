@@ -6,3 +6,10 @@ __pycache__/
 .env
 dist/
 .next/
+sample-app/docs/
+sample-app/src/routes/auth.ts
+sample-app/src/routes/preferences.ts
+sample-app/src/services/exporter.ts
+sample-app/src/services/otp.ts
+sample-app/src/middleware/rateLimiter.ts
+demo/dashboard-requests/

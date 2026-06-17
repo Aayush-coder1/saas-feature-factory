@@ -68,27 +68,28 @@ export default function Home() {
       const data = await res.json();
       if (data.ok) {
         setDemoStatus("Demo running...");
-        const poll = setInterval(() => {
+        const poll = setInterval(async () => {
           fetchEvents();
-          fetch("/api/demo/status")
-            .then((r) => r.json())
-            .then((s) => {
-              if (s.running === false) {
-                setDemoRunning(false);
-                setDemoStatus(s.result || "Demo complete!");
-                clearInterval(poll);
-                fetchEvents();
-              }
-            })
-            .catch(() => {});
+          try {
+            const sr = await fetch("/api/demo/status");
+            const s = await sr.json();
+            if (s.running === false) {
+              setDemoRunning(false);
+              setDemoStatus(s.result || "Demo complete!");
+              clearInterval(poll);
+              fetchEvents();
+            }
+          } catch {
+            setDemoStatus("Status check failed (retrying...)");
+          }
         }, 2000);
       } else {
         setDemoRunning(false);
         setDemoStatus(data.error || "Failed to start");
       }
-    } catch {
+    } catch (err) {
       setDemoRunning(false);
-      setDemoStatus("Failed to start demo");
+      setDemoStatus(`Failed: ${err instanceof Error ? err.message : "unknown error"}`);
     }
   };
 

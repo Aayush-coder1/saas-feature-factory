@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { existsSync, readFileSync } from "fs";
 import { resolve } from "path";
 
-const PROJECT_ROOT = resolve(import.meta.dirname, "..", "..", "..", "..", "..");
+const PROJECT_ROOT = resolve(process.cwd(), "..");
 const STATE_FILE = resolve(PROJECT_ROOT, ".band_store", "demo_state.json");
 
 export async function GET() {

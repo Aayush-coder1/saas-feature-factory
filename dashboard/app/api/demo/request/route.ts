@@ -1,10 +1,22 @@
 import { NextRequest, NextResponse } from "next/server";
-import { spawn } from "child_process";
+import { spawn, execSync } from "child_process";
 import { writeFileSync, existsSync, mkdirSync } from "fs";
 import { resolve } from "path";
 
-const PROJECT_ROOT = resolve(import.meta.dirname, "..", "..", "..", "..", "..");
+const PROJECT_ROOT = resolve(process.cwd(), "..");
 const REQUESTS_DIR = resolve(PROJECT_ROOT, "demo", "dashboard-requests");
+
+function findPython(): string {
+  for (const cmd of ["python", "python3", "py"]) {
+    try {
+      execSync(`${cmd} --version`, { stdio: "ignore" });
+      return cmd;
+    } catch {
+      continue;
+    }
+  }
+  return "python";
+}
 
 export async function POST(req: NextRequest) {
   try {
@@ -13,26 +25,20 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "title is required" }, { status: 400 });
     }
 
-    if (!existsSync(REQUESTS_DIR)) {
-      mkdirSync(REQUESTS_DIR, { recursive: true });
-    }
-
-    const featureFile = resolve(REQUESTS_DIR, `${title.replace(/[^a-z0-9]/gi, "_").toLowerCase()}.json`);
-    writeFileSync(featureFile, JSON.stringify({ title, request: request || title }, null, 2));
-
-    // Also try to run the feature through the agent pipeline
     const agentsDir = resolve(PROJECT_ROOT, "agents");
-    const pythonCmd = process.platform === "win32" ? "python" : "python3";
+    const pythonCmd = findPython();
 
     const proc = spawn(pythonCmd, ["-m", "agents.orchestrator.cli", "request", title, request || title], {
       cwd: agentsDir,
-      env: { ...process.env, PYTHONPATH: PROJECT_ROOT },
+      env: { ...process.env, PYTHONPATH: PROJECT_ROOT, PATH: process.env.PATH },
       stdio: "ignore",
       detached: true,
     });
+
+    const started = proc.pid !== undefined;
     proc.unref();
 
-    return NextResponse.json({ ok: true, feature: title });
+    return NextResponse.json({ ok: started, feature: title });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Internal error";
     return NextResponse.json({ error: message }, { status: 500 });
