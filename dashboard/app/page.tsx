@@ -25,10 +25,32 @@ const AGENTS = [
   { id: "docs-agent", label: "Docs", color: "amber", icon: "📝" },
 ] as const;
 
+type DemoStep = {
+  active: boolean;
+  feature?: string;
+  feature_index?: number;
+  total_features?: number;
+  agent?: string;
+  stage?: string;
+  status?: string;
+};
+
+const STAGE_LABELS: Record<string, string> = {
+  submitted: "Submitted",
+  spec: "Spec'ing",
+  coding: "Coding",
+  qa: "Testing",
+  deploy: "Deploying",
+  docs: "Documenting",
+};
+
+const AGENT_ORDER = ["spec-agent", "code-gen-agent", "qa-agent", "deploy-agent", "docs-agent"];
+
 export default function Home() {
   const [events, setEvents] = useState<AgentEvent[]>([]);
   const [demoRunning, setDemoRunning] = useState(false);
   const [demoStatus, setDemoStatus] = useState<string | null>(null);
+  const [currentStep, setCurrentStep] = useState<DemoStep | null>(null);
 
   const fetchEvents = useCallback(() => {
     fetch("/api/events")
@@ -37,11 +59,25 @@ export default function Home() {
       .catch(() => {});
   }, []);
 
+  const fetchStep = useCallback(() => {
+    fetch("/api/demo/step")
+      .then((r) => r.json())
+      .then((s) => setCurrentStep(s))
+      .catch(() => {});
+  }, []);
+
   useEffect(() => {
     fetchEvents();
     const interval = setInterval(fetchEvents, 2000);
     return () => clearInterval(interval);
   }, [fetchEvents]);
+
+  useEffect(() => {
+    if (!demoRunning) return;
+    fetchStep();
+    const interval = setInterval(fetchStep, 1500);
+    return () => clearInterval(interval);
+  }, [demoRunning, fetchStep]);
 
   const latestPerAgent = new Map<string, AgentEvent>();
   for (const e of events) {
@@ -136,6 +172,55 @@ export default function Home() {
           demoRunning={demoRunning}
           demoStatus={demoStatus}
         />
+
+        {/* Live Progress Bar - shown during demo */}
+        {demoRunning && currentStep?.active && (
+          <div className="glass rounded-xl p-5 mt-5 glow-green animate-slide-up">
+            <div className="flex items-center justify-between mb-3">
+              <div className="flex items-center gap-3">
+                <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse-glow" />
+                <span className="text-sm font-medium text-zinc-200">
+                  Processing: <span className="text-green-400">{currentStep.feature}</span>
+                </span>
+              </div>
+              <span className="text-xs text-zinc-500">
+                Step {currentStep.feature_index! + 1} of {currentStep.total_features}
+              </span>
+            </div>
+            {/* Progress bar */}
+            <div className="h-2 rounded-full bg-white/5 overflow-hidden mb-4">
+              <div
+                className="h-full rounded-full bg-gradient-to-r from-green-500 to-emerald-400 transition-all duration-700"
+                style={{ width: `${((currentStep.feature_index! + 1) / currentStep.total_features!) * 100}%` }}
+              />
+            </div>
+            {/* Agent pipeline flow */}
+            <div className="flex items-center gap-1">
+              {AGENT_ORDER.map((aid, i) => {
+                const agent = AGENTS.find((a) => a.id === aid)!;
+                const isCurrent = currentStep.agent === aid;
+                const isDone = AGENT_ORDER.indexOf(currentStep.agent || "") > i;
+                return (
+                  <div key={aid} className="flex items-center gap-1 flex-1">
+                    <div className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs transition-all ${
+                      isCurrent ? "bg-green-500/15 text-green-300 border border-green-500/30" :
+                      isDone ? "bg-green-500/10 text-green-500" :
+                      "bg-white/[0.02] text-zinc-600"
+                    }`}>
+                      <span>{agent.icon}</span>
+                      <span className="hidden sm:inline">{agent.label}</span>
+                      {isCurrent && <span className="w-1 h-1 rounded-full bg-green-500 animate-pulse-glow ml-1" />}
+                      {isDone && <span className="text-[10px] ml-1">✓</span>}
+                    </div>
+                    {i < AGENT_ORDER.length - 1 && (
+                      <div className={`h-px flex-1 ${isDone ? "bg-green-500/30" : "bg-white/5"}`} />
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
 
         {/* Grid */}
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 mt-8">

@@ -16,6 +16,19 @@ from ..deploy_agent.agent import DeployAgent
 from ..docs_agent.agent import DocsAgent
 from .room_manager import RoomManager
 
+STEP_DIR = PROJECT_ROOT / ".demo_state"
+
+
+def _write_step(data: dict):
+    STEP_DIR.mkdir(parents=True, exist_ok=True)
+    (STEP_DIR / "step.json").write_text(json.dumps(data, indent=2))
+
+
+def _clear_step():
+    f = STEP_DIR / "step.json"
+    if f.exists():
+        f.unlink()
+
 
 class DemoOrchestrator:
     def __init__(self):
@@ -33,12 +46,40 @@ class DemoOrchestrator:
         self.bus = shared_bus
         self.pending_features: asyncio.Queue = asyncio.Queue()
         self.completion_event = asyncio.Event()
-        self._current_feature = None
+        self._current_feature = 0
+        self._total_features = 0
 
     async def _global_listener(self, message: Message):
         self.room.add_message(message)
         if message.msg_type == "qa_report":
             self.completion_event.set()
+        if message.msg_type == "code_patch":
+            _write_step({
+                "feature": self._features[self._current_feature]["title"] if self._features else "",
+                "feature_index": self._current_feature,
+                "total_features": self._total_features,
+                "agent": "code-gen-agent",
+                "stage": "coding",
+                "status": message.content.get("status", "generated"),
+            })
+        elif message.msg_type == "blueprint":
+            _write_step({
+                "feature": self._features[self._current_feature]["title"] if self._features else "",
+                "feature_index": self._current_feature,
+                "total_features": self._total_features,
+                "agent": "spec-agent",
+                "stage": "spec",
+                "status": "done",
+            })
+        elif message.msg_type == "qa_report":
+            _write_step({
+                "feature": self._features[self._current_feature]["title"] if self._features else "",
+                "feature_index": self._current_feature,
+                "total_features": self._total_features,
+                "agent": "qa-agent",
+                "stage": "qa",
+                "status": "passed" if message.content.get("qa_signed_off") else "failed",
+            })
 
     async def submit_feature(self, title: str, request: str):
         msg = Message(
@@ -50,6 +91,9 @@ class DemoOrchestrator:
         print(f"\n[User] Submitted feature: {title}")
 
     async def run_workflow(self, features: list[dict]):
+        self._features = features
+        self._total_features = len(features)
+
         print(f"\n{'#' * 60}")
         print(f"# SAAS FEATURE FACTORY - DEMO MODE")
         print(f"# Multi-Agent System via Band Collaboration Layer")
@@ -62,13 +106,30 @@ class DemoOrchestrator:
         listener_task = asyncio.create_task(self.bus.start())
         await asyncio.sleep(1)
 
-        for feature in features:
+        for idx, feature in enumerate(features):
+            self._current_feature = idx
             self.completion_event.clear()
+            _write_step({
+                "feature": feature["title"],
+                "feature_index": idx,
+                "total_features": len(features),
+                "agent": "orchestrator",
+                "stage": "submitted",
+                "status": "pending",
+            })
             await self.submit_feature(feature["title"], feature["request"])
             try:
                 await asyncio.wait_for(self.completion_event.wait(), timeout=30)
             except asyncio.TimeoutError:
                 print(f"[Demo] Timeout waiting for feature: {feature['title']}")
+            _write_step({
+                "feature": feature["title"],
+                "feature_index": idx,
+                "total_features": len(features),
+                "agent": "deploy-agent",
+                "stage": "deploy",
+                "status": "deploying",
+            })
             await asyncio.sleep(1)
 
         await asyncio.sleep(1)
@@ -78,6 +139,7 @@ class DemoOrchestrator:
         except asyncio.CancelledError:
             pass
 
+        _clear_step()
         self.room.print_workflow()
         return self.room.get_workflow_state()
 

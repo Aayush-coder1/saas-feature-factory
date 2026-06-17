@@ -39,19 +39,30 @@ async def cmd_band(args):
     print("[CLI] Starting Band mode - connecting agents to Band platform...")
     print("[CLI] This requires valid Band credentials in .env")
     print("[CLI] See .env.example for configuration details.")
+
+    if not config.band_api_key:
+        print("[CLI] ERROR: BAND_API_KEY not set. Configure .env file.")
+        print("[CLI] Copy .env.example to .env and fill in your Band credentials.")
+        return
+
     from agents.spec_agent.agent import SpecAgent
     from agents.code_gen_agent.agent import CodeGenAgent
     from agents.qa_agent.agent import QAAgent
+    from agents.deploy_agent.agent import DeployAgent
+    from agents.docs_agent.agent import DocsAgent
 
     agents = [
         SpecAgent(),
         CodeGenAgent(),
         QAAgent(),
+        DeployAgent(),
+        DocsAgent(),
     ]
 
     tasks = [asyncio.create_task(agent.run()) for agent in agents]
     print(f"[CLI] {len(agents)} agents connected to Band. Listening for feature requests...")
-    print("[CLI] Submit requests via Band UI or API.")
+    print(f"[CLI] Room: feature-factory | Project: {config.band_project_id or 'default'}")
+    print("[CLI] Submit feature requests via the Band dashboard.")
     await asyncio.gather(*tasks)
 
 
