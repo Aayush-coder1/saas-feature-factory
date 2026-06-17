@@ -1,0 +1,6 @@
+{
+  "title": "Add Label Filtering",
+  "request": "Add the ability to filter tasks by label on GET /api/tasks. Tasks already have a 'labels' field (array of strings). Add a ?label=devops query parameter that filters results to only tasks containing that label.",
+  "priority": "medium",
+  "type": "api"
+}

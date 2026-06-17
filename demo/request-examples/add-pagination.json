@@ -1,0 +1,6 @@
+{
+  "title": "Add Pagination Support",
+  "request": "Add pagination to the tasks list endpoint at GET /api/tasks. Users should be able to pass ?page=1&limit=20 query parameters. The response should include total count, current page, limit, and total_pages so the frontend can render pagination controls. Keep the existing response format but add these pagination fields.",
+  "priority": "high",
+  "type": "api"
+}

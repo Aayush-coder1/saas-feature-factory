@@ -1,0 +1,9 @@
+@import "tailwindcss";
+@config "../tailwind.config.ts";
+
+body {
+  margin: 0;
+  font-family: "Inter", system-ui, -apple-system, sans-serif;
+  background: #0f0f13;
+  color: #e4e4e7;
+}

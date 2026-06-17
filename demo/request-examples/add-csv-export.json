@@ -1,0 +1,6 @@
+{
+  "title": "Add CSV Export",
+  "request": "Add a CSV export endpoint at GET /api/tasks/export/csv. It should return all tasks as a downloadable CSV file with the following columns: id, title, description, status, priority, userId, labels, createdAt, updatedAt. Use proper CSV escaping for fields that may contain commas or quotes.",
+  "priority": "medium",
+  "type": "api"
+}

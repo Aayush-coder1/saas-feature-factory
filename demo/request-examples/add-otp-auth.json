@@ -1,0 +1,6 @@
+{
+  "title": "Add OTP Authentication",
+  "request": "Add an OTP-based authentication flow. Two endpoints: POST /api/auth/request-otp (takes userId, returns a code) and POST /api/auth/verify-otp (takes userId + code, returns a session token). OTP codes should expire after 5 minutes. One-time use only.",
+  "priority": "high",
+  "type": "auth"
+}

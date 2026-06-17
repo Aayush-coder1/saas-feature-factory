@@ -1,0 +1,14 @@
+{
+  "name": "saas-feature-factory",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Multi-Agent SaaS Feature Factory - Band AI Hackathon",
+  "scripts": {
+    "demo": "node scripts/restore-sample-app.mjs && node scripts/run-demo.mjs",
+    "test": "cd sample-app && npx vitest run",
+    "agents": "cd agents && python -m agents.orchestrator.cli demo",
+    "restore": "node scripts/restore-sample-app.mjs",
+    "dashboard": "cd dashboard && npm run dev",
+    "setup": "cd sample-app && npm install && cd ../dashboard && npm install && npx prisma generate"
+  }
+}

@@ -1,0 +1,6 @@
+{
+  "title": "Add Dark Mode Theme Preference",
+  "request": "Add a user preferences system with theme support. Two endpoints: GET /api/preferences/:userId (returns user preferences including theme) and PUT /api/preferences/:userId/theme (body: { theme: 'dark' | 'light' }). Default theme should be 'light'.",
+  "priority": "low",
+  "type": "ui"
+}
