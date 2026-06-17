@@ -95,3 +95,24 @@ After Phase 2, agents POST state changes to Next.js `/api/events`:
 ```json
 {"agent_id": "spec-agent", "status": "done", "feature_id": "...", "message_type": "blueprint", "payload": {...}}
 ```
+
+## GSD Planning
+
+Project planning lives in `../.planning/` (root workspace level):
+
+| Artifact | Location |
+|----------|----------|
+| Project | `../.planning/PROJECT.md` |
+| Config | `../.planning/config.json` |
+| Codebase Map | `../.planning/codebase/` (7 docs) |
+| Requirements | `../.planning/REQUIREMENTS.md` |
+| Roadmap | `../.planning/ROADMAP.md` |
+| State | `../.planning/STATE.md` |
+
+**Current phase:** Phase 1 — Band WebSocket Integration (critical for hackathon judging)
+**Mode:** YOLO (auto-approve, just execute)
+**Deadline:** June 19, 2026
+
+**Commands:**
+- `/gsd-plan-phase 1` — plan Phase 1 execution
+- `/gsd-execute-phase 1` — execute Phase 1
