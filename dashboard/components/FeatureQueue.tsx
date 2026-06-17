@@ -1,32 +1,62 @@
+"use client";
+
 type Props = { features: string[] };
 
-const statusMap: Record<string, { label: string; color: string }> = {
-  requested: { label: "Requested", color: "bg-zinc-600" },
-  blueprint: { label: "Spec'd", color: "bg-blue-500" },
-  coded: { label: "Coded", color: "bg-purple-500" },
-  tested: { label: "Tested", color: "bg-green-500" },
-  deployed: { label: "Deployed", color: "bg-purple-500" },
-};
+const allFeatures = [
+  { title: "Add CSV Export", icon: "📄" },
+  { title: "Add Dark Mode", icon: "🌙" },
+  { title: "Add Label Filtering", icon: "🏷️" },
+  { title: "Add OTP Auth", icon: "🔐" },
+  { title: "Add Pagination", icon: "📑" },
+];
 
 export function FeatureQueue({ features }: Props) {
-  const allFeatures = [
-    { title: "Add CSV Export", status: "tested" },
-    { title: "Add Dark Mode", status: "tested" },
-    { title: "Add Label Filtering", status: "tested" },
-    { title: "Add OTP Auth", status: "tested" },
-    { title: "Add Pagination", status: "tested" },
-  ];
-
   return (
     <div className="space-y-2">
       {allFeatures.map((f, i) => {
         const completed = features.some((c) => f.title.includes(c) || c.includes(f.title));
-        const st = completed ? { label: "Completed", color: "bg-green-500" } : statusMap[f.status] || statusMap.requested;
         return (
-          <div key={i} className="flex items-center gap-3 p-2 rounded bg-surface-alt border border-border">
-            <span className={`w-2 h-2 rounded-full shrink-0 ${st.color}`} />
-            <span className="text-sm text-zinc-300 flex-1 truncate">{f.title}</span>
-            <span className="text-xs text-zinc-500">{st.label}</span>
+          <div
+            key={i}
+            className={`flex items-center gap-3 p-2.5 rounded-xl transition-all duration-300 ${
+              completed
+                ? "bg-green-500/5 border border-green-500/20"
+                : "bg-white/[0.02] border border-white/5"
+            }`}
+          >
+            {/* Status icon */}
+            <div className={`w-7 h-7 rounded-lg flex items-center justify-center text-xs transition-all ${
+              completed
+                ? "bg-green-500/20 text-green-400"
+                : "bg-zinc-800 text-zinc-600"
+            }`}>
+              {completed ? "✓" : f.icon}
+            </div>
+
+            {/* Title */}
+            <span className={`text-sm flex-1 transition-all ${
+              completed ? "text-zinc-200" : "text-zinc-500"
+            }`}>
+              {f.title}
+            </span>
+
+            {/* Progress bar + status */}
+            <div className="flex items-center gap-2">
+              <div className="w-16 h-1.5 rounded-full bg-white/5 overflow-hidden hidden sm:block">
+                <div
+                  className={`h-full rounded-full transition-all duration-700 ${
+                    completed ? "bg-green-500 w-full" : "w-0"
+                  }`}
+                />
+              </div>
+              <span className={`text-[10px] font-medium px-2 py-0.5 rounded-full ${
+                completed
+                  ? "bg-green-500/20 text-green-400"
+                  : "bg-zinc-800 text-zinc-600"
+              }`}>
+                {completed ? "Done" : "Pending"}
+              </span>
+            </div>
           </div>
         );
       })}

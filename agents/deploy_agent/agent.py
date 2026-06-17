@@ -2,6 +2,7 @@
 
 import subprocess
 import time
+import socket
 from ..core.base_agent import BaseAgent
 from ..core.message_bus import Message
 from ..core.config import config
@@ -11,32 +12,40 @@ from ..common.state_reporter import report_state
 class DeployAgent(BaseAgent):
     def __init__(self, **kwargs):
         super().__init__(name="deploy-agent", **kwargs)
-        self._process = None
+        self._server_started = False
+
+    def _port_in_use(self, port: int = 3001) -> bool:
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+            return s.connect_ex(("127.0.0.1", port)) == 0
 
     def _start_sample_app(self) -> bool:
-        """Start the sample app via Node.js for smoke testing."""
+        if self._port_in_use():
+            print("[Deploy Agent] Server already running on port 3001")
+            return True
         try:
             app_dir = config.sample_app_dir
-            self._process = subprocess.Popen(
+            subprocess.Popen(
                 ["npx", "tsx", "src/index.ts"],
                 stdout=subprocess.DEVNULL,
                 stderr=subprocess.DEVNULL,
                 cwd=app_dir,
             )
-            time.sleep(3)
+            self._server_started = True
             return True
         except Exception as e:
             print(f"[Deploy Agent] Start failed: {e}")
             return False
 
     def _smoke_test(self) -> bool:
-        """Hit the health endpoint to verify the app is running."""
         import httpx
-        try:
-            resp = httpx.get("http://localhost:3001/health", timeout=5)
-            return resp.status_code == 200
-        except Exception:
-            return False
+        for attempt in range(5):
+            try:
+                resp = httpx.get("http://localhost:3001/health", timeout=3)
+                return resp.status_code == 200
+            except Exception:
+                if attempt < 4:
+                    time.sleep(2)
+        return False
 
     async def handle_message(self, message: Message):
         if message.msg_type != "qa_report":
@@ -54,7 +63,10 @@ class DeployAgent(BaseAgent):
         print(f"[Deploy Agent] Deploying: {feature}")
 
         success = self._start_sample_app()
-        smoke_ok = self._smoke_test() if success else False
+        if success:
+            smoke_ok = self._smoke_test()
+        else:
+            smoke_ok = False
 
         status = "deployed" if smoke_ok else "failed"
         print(f"[Deploy Agent] Result: {status}")

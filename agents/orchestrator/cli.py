@@ -27,6 +27,14 @@ async def cmd_demo(args):
         print("All features passed QA and are ready for deployment!")
 
 
+async def cmd_request(args):
+    orch = DemoOrchestrator()
+    features = [{"title": args.title, "request": args.request}]
+    state = await orch.run_workflow(features)
+    completed = len(state["completed_features"])
+    print(f"\nFeature '{args.title}': {'PASSED' if completed > 0 else 'FAILED'}")
+
+
 async def cmd_band(args):
     print("[CLI] Starting Band mode - connecting agents to Band platform...")
     print("[CLI] This requires valid Band credentials in .env")
@@ -54,12 +62,17 @@ def main():
     sub = parser.add_subparsers(dest="command")
 
     demo_parser = sub.add_parser("demo", help="Run local demo with simulated Band rooms")
+    req_parser = sub.add_parser("request", help="Run a single feature request through the pipeline")
+    req_parser.add_argument("title", help="Feature title")
+    req_parser.add_argument("request", nargs="?", default="", help="Feature description")
     band_parser = sub.add_parser("band", help="Connect to real Band platform")
 
     args = parser.parse_args()
 
     if args.command == "demo":
         asyncio.run(cmd_demo(args))
+    elif args.command == "request":
+        asyncio.run(cmd_request(args))
     elif args.command == "band":
         asyncio.run(cmd_band(args))
     else:
