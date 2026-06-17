@@ -34,6 +34,7 @@ If you see `ModuleNotFoundError: No module named 'agents'`, PYTHONPATH is missin
 | Feature ordering | all generators | Modifications fail if prior generator changed target strings | Process features: pagination → search → label → rest |
 | Test isolation | `tasks.test.ts` | Shared mutable `Map` with no reset — order-dependent | Use `beforeEach` with `db.tasks.reset()` |
 | BandMessageBus | `message_bus.py:134` | Hardcodes `AnthropicAdapter` | Check available API keys |
+| Grok API key | `config.py:24` | `gsk_*` keys may not have access to latest models | Get new key from console.x.ai |
 | LLM keys unused | `config.py:23-24` | `OPENAI_API_KEY`/`ANTHROPIC_API_KEY` never consumed | Wire into LLM service |
 | Docker compose | `docker-compose.demo.yml:5` | `node:22-alpine` has no Python | Use `nikolaik/python-nodejs:python3.12-nodejs22-slim` |
 | Room memory | `room_manager.py:16` | Messages grow unbounded | Prune after 1000 |

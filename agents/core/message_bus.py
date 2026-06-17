@@ -10,6 +10,7 @@ import json
 import time
 import uuid
 import asyncio
+import sys
 from pathlib import Path
 from abc import ABC, abstractmethod
 from typing import Callable
@@ -127,18 +128,26 @@ class BandMessageBus(MessageBus):
     async def start(self):
         try:
             from band import Agent
-            from band.adapters import AnthropicAdapter, OpenaiAdapter
+            from band.adapters import AnthropicAdapter, GeminiAdapter
         except ImportError:
-            print("[BandMessageBus] band-sdk not installed. Install with: pip install band-sdk[anthropic]")
+            print("[BandMessageBus] band-sdk not installed. Install with: pip install band-sdk")
             raise
 
+        if sys.version_info >= (3, 13):
+            print("[BandMessageBus] WARNING: band-sdk may have compatibility issues on Python 3.13+")
+            print("[BandMessageBus] If agent fails to start, downgrade to Python 3.12")
+
         from ..core.config import config
-        if config.anthropic_api_key:
-            adapter = AnthropicAdapter()
+        if config.grok_api_key:
+            from .grok_adapter import GrokAdapter
+            adapter = GrokAdapter(api_key=config.grok_api_key)
         elif config.openai_api_key:
-            adapter = OpenaiAdapter()
+            from .openai_adapter import OpenAIAdapter
+            adapter = OpenAIAdapter(api_key=config.openai_api_key)
+        elif config.anthropic_api_key:
+            adapter = AnthropicAdapter()
         else:
-            print("[BandMessageBus] No API key configured for any LLM adapter")
+            print("[BandMessageBus] No API key configured (GROK_API_KEY, OPENAI_API_KEY, or ANTHROPIC_API_KEY)")
             raise ValueError("No LLM API key configured")
 
         self._agent = Agent.create(
@@ -153,6 +162,3 @@ class BandMessageBus(MessageBus):
     async def stop(self):
         if self._agent:
             await self._agent.stop()
-
-
-

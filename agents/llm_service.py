@@ -1,4 +1,4 @@
-"""LLM service that dispatches to OpenAI or Anthropic via httpx."""
+"""LLM service that dispatches to Grok, OpenAI, or Anthropic via httpx."""
 
 import json
 import httpx
@@ -6,10 +6,12 @@ from .core.config import config
 
 
 def _available_provider() -> str | None:
-    if config.anthropic_api_key:
-        return "anthropic"
+    if config.grok_api_key:
+        return "grok"
     if config.openai_api_key:
         return "openai"
+    if config.anthropic_api_key:
+        return "anthropic"
     return None
 
 
@@ -43,9 +45,10 @@ Respond with ONLY a JSON object with these fields:
         if provider == "anthropic":
             return await _call_anthropic(messages, "blueprint")
         else:
-            return await _call_openai(messages, "blueprint")
+            return await _call_openai_compat(messages, provider, "blueprint")
     except Exception as e:
         print(f"[LLM Service] {provider} call failed: {e}")
+        print(f"[LLM Service] Falling back to template-based generation (no impact on demo)")
         return None
 
 
@@ -74,10 +77,40 @@ Respond with ONLY a JSON array of {{action: "create"|"modify", path: "<relative 
         if provider == "anthropic":
             return await _call_anthropic(messages, "code")
         else:
-            return await _call_openai(messages, "code")
+            return await _call_openai_compat(messages, provider, "code")
     except Exception as e:
         print(f"[LLM Service] {provider} call failed: {e}")
+        print(f"[LLM Service] Falling back to template-based generation (no impact on demo)")
         return None
+
+
+def _provider_config(provider: str):
+    """Return (base_url, api_key, model) for the given provider."""
+    if provider == "grok":
+        return "https://api.x.ai/v1", config.grok_api_key, "grok-4.3"
+    if provider == "openai":
+        return "https://api.openai.com/v1", config.openai_api_key, "gpt-4o"
+    raise ValueError(f"Unknown provider: {provider}")
+
+
+async def _call_openai_compat(messages: list, provider: str, mode: str) -> dict | list:
+    base_url, api_key, model = _provider_config(provider)
+    async with httpx.AsyncClient(timeout=120) as client:
+        resp = await client.post(
+            f"{base_url}/chat/completions",
+            headers={
+                "Authorization": f"Bearer {api_key}",
+                "content-type": "application/json",
+            },
+            json={
+                "model": model,
+                "max_tokens": 4096,
+                "messages": messages,
+            },
+        )
+        resp.raise_for_status()
+        content = resp.json()["choices"][0]["message"]["content"]
+        return json.loads(content)
 
 
 async def _call_anthropic(messages: list, mode: str) -> dict | list:
@@ -97,23 +130,4 @@ async def _call_anthropic(messages: list, mode: str) -> dict | list:
         )
         resp.raise_for_status()
         content = resp.json()["content"][0]["text"]
-        return json.loads(content)
-
-
-async def _call_openai(messages: list, mode: str) -> dict | list:
-    async with httpx.AsyncClient(timeout=120) as client:
-        resp = await client.post(
-            "https://api.openai.com/v1/chat/completions",
-            headers={
-                "Authorization": f"Bearer {config.openai_api_key}",
-                "content-type": "application/json",
-            },
-            json={
-                "model": "gpt-4o",
-                "max_tokens": 4096,
-                "messages": messages,
-            },
-        )
-        resp.raise_for_status()
-        content = resp.json()["choices"][0]["message"]["content"]
         return json.loads(content)

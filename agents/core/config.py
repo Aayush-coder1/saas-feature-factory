@@ -2,9 +2,8 @@ import os
 from pathlib import Path
 from dotenv import load_dotenv
 
-load_dotenv()
-
 PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
+load_dotenv(PROJECT_ROOT / ".env")
 SAMPLE_APP_DIR = PROJECT_ROOT / "sample-app"
 FEATURES_DIR = SAMPLE_APP_DIR / "features"
 AGENTS_DIR = PROJECT_ROOT / "agents"
@@ -20,6 +19,7 @@ class Config:
     band_api_key: str = os.getenv("BAND_API_KEY", "")
     band_project_id: str = os.getenv("BAND_PROJECT_ID", "")
 
+    grok_api_key: str = os.getenv("GROK_API_KEY", "")
     openai_api_key: str = os.getenv("OPENAI_API_KEY", "")
     anthropic_api_key: str = os.getenv("ANTHROPIC_API_KEY", "")
 
