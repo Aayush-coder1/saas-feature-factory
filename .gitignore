@@ -1,6 +1,7 @@
 node_modules/
 .vite/
 .band_store/
+.demo_state/
 __pycache__/
 *.pyc
 .env

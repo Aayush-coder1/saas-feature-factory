@@ -4,11 +4,11 @@ import { writeFileSync, existsSync, mkdirSync } from "fs";
 import { resolve } from "path";
 
 const PROJECT_ROOT = resolve(process.cwd(), "..");
-const BAND_STORE = resolve(PROJECT_ROOT, ".band_store");
-const STATE_FILE = resolve(BAND_STORE, "demo_state.json");
+const STATE_DIR = resolve(PROJECT_ROOT, ".demo_state");
+const STATE_FILE = resolve(STATE_DIR, "state.json");
 
 function writeState(state: { running: boolean; startedAt: string; result?: string }) {
-  if (!existsSync(BAND_STORE)) mkdirSync(BAND_STORE, { recursive: true });
+  if (!existsSync(STATE_DIR)) mkdirSync(STATE_DIR, { recursive: true });
   writeFileSync(STATE_FILE, JSON.stringify(state));
 }
 

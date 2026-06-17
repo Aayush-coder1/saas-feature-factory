@@ -3,7 +3,7 @@ import { existsSync, readFileSync } from "fs";
 import { resolve } from "path";
 
 const PROJECT_ROOT = resolve(process.cwd(), "..");
-const STATE_FILE = resolve(PROJECT_ROOT, ".band_store", "demo_state.json");
+const STATE_FILE = resolve(PROJECT_ROOT, ".demo_state", "state.json");
 
 export async function GET() {
   if (!existsSync(STATE_FILE)) {
