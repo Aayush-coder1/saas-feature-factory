@@ -13,7 +13,7 @@ import asyncio
 import sys
 from pathlib import Path
 from abc import ABC, abstractmethod
-from typing import Callable
+from typing import Any, Callable
 from dataclasses import dataclass, field, asdict
 
 @dataclass
@@ -102,63 +102,46 @@ class LocalMessageBus(MessageBus):
         self._running = False
 
 
-class BandMessageBus(MessageBus):
-    """Real Band SDK integration for production."""
+class BandRoomManager:
+    """REST-only room management for Band platform.
+    WebSocket event flow handled per-agent via band_adapter.py.
 
-    def __init__(self, agent_id: str, api_key: str, ws_url: str, rest_url: str):
-        self.agent_id = agent_id
+    Usage (sync, for startup only — not for use inside async agents):
+        mgr = BandRoomManager(api_key="...", rest_url="...")
+        room_id = mgr.create_room()
+        mgr.add_participant(room_id, "agent-uuid")
+    """
+
+    def __init__(self, api_key: str, rest_url: str = "https://app.band.ai"):
         self.api_key = api_key
-        self.ws_url = ws_url
-        self.rest_url = rest_url
-        self._agent = None
-        self._callbacks: dict[str, list[Callable]] = {}
+        self.rest_url = rest_url.rstrip("/")
+        self._rest = None
 
-    async def publish(self, message: Message, channel: str = "default"):
-        if self._agent:
-            await self._agent.send_message(
-                room_id=channel,
-                content=json.dumps(message.to_dict()),
+    def _ensure(self):
+        if self._rest is None:
+            from thenvoi_rest import RestClient
+            self._rest = RestClient(
+                api_key=self.api_key,
+                base_url=self.rest_url,
             )
 
-    async def subscribe(self, channel: str, callback: Callable):
-        if channel not in self._callbacks:
-            self._callbacks[channel] = []
-        self._callbacks[channel].append(callback)
+    def create_room(self) -> str:
+        self._ensure()
+        from thenvoi_rest.types.chat_room_request import ChatRoomRequest
+        resp = self._rest.agent_api_chats.create_agent_chat(chat=ChatRoomRequest(task_id=None))
+        return resp.data.id
 
-    async def start(self):
-        try:
-            from band import Agent
-            from band.adapters import AnthropicAdapter, GeminiAdapter
-        except ImportError:
-            print("[BandMessageBus] band-sdk not installed. Install with: pip install band-sdk")
-            raise
-
-        if sys.version_info >= (3, 13):
-            print("[BandMessageBus] WARNING: band-sdk may have compatibility issues on Python 3.13+")
-            print("[BandMessageBus] If agent fails to start, downgrade to Python 3.12")
-
-        from ..core.config import config
-        if config.grok_api_key:
-            from .grok_adapter import GrokAdapter
-            adapter = GrokAdapter(api_key=config.grok_api_key)
-        elif config.openai_api_key:
-            from .openai_adapter import OpenAIAdapter
-            adapter = OpenAIAdapter(api_key=config.openai_api_key)
-        elif config.anthropic_api_key:
-            adapter = AnthropicAdapter()
-        else:
-            print("[BandMessageBus] No API key configured (GROK_API_KEY, OPENAI_API_KEY, or ANTHROPIC_API_KEY)")
-            raise ValueError("No LLM API key configured")
-
-        self._agent = Agent.create(
-            adapter=adapter,
-            agent_id=self.agent_id,
-            api_key=self.api_key,
-            ws_url=self.ws_url,
-            rest_url=self.rest_url,
+    def add_participant(self, room_id: str, participant_id: str):
+        self._ensure()
+        from thenvoi_rest.types.participant_request import ParticipantRequest
+        self._rest.agent_api_participants.add_agent_chat_participant(
+            chat_id=room_id,
+            participant=ParticipantRequest(participant_id=participant_id, role="member"),
         )
-        await self._agent.run()
 
-    async def stop(self):
-        if self._agent:
-            await self._agent.stop()
+
+class BandMessageBus:
+    """Legacy stub — kept for import compatibility.
+    Real Band integration uses BandAgentAdapter per agent.
+    """
+    pass

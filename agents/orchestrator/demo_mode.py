@@ -80,6 +80,16 @@ class DemoOrchestrator:
                 "stage": "qa",
                 "status": "passed" if message.content.get("qa_signed_off") else "failed",
             })
+        elif message.msg_type == "deployment_result":
+            status = message.content.get("status", "unknown")
+            _write_step({
+                "feature": self._features[self._current_feature]["title"] if self._features else "",
+                "feature_index": self._current_feature,
+                "total_features": self._total_features,
+                "agent": "deploy-agent",
+                "stage": "deploy",
+                "status": "deployed" if status == "deployed" else "failed",
+            })
 
     async def submit_feature(self, title: str, request: str):
         msg = Message(

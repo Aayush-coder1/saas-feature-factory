@@ -8,9 +8,10 @@ High-signal operational guidance for OpenCode sessions on this repo.
 user → feature_request → SpecAgent → blueprint → CodeGenAgent → code_patch → QAAgent → qa_report → done
 ```
 
-Three Python agents communicate through a shared `MessageBus`:
+Five Python agents communicate through a shared `MessageBus`:
 - **LocalMessageBus** (file-based, `.band_store/.message_store/`): for demo/dev, no external deps
-- **BandMessageBus** (WebSocket to band.ai): for production, needs `band-sdk` and Band credentials
+- **BandAgentAdapter** (WebSocket via `band.Agent` + `SimpleAdapter`): per-agent connection to app.band.ai, per-agent credentials from `.env`
+- **BandRoomManager** (sync REST client): room creation + participant management at startup only
 
 Entrypoint: `python -m agents.orchestrator.cli demo|band` (from `agents/` dir)
 
@@ -33,7 +34,7 @@ If you see `ModuleNotFoundError: No module named 'agents'`, PYTHONPATH is missin
 | Label/search routing | `code_gen_agent/agent.py:296-299` | Routes label/search to pagination generator | Route to dedicated generators |
 | Feature ordering | all generators | Modifications fail if prior generator changed target strings | Process features: pagination → search → label → rest |
 | Test isolation | `tasks.test.ts` | Shared mutable `Map` with no reset — order-dependent | Use `beforeEach` with `db.tasks.reset()` |
-| BandMessageBus | `message_bus.py:134` | Hardcodes `AnthropicAdapter` | Check available API keys |
+| Demo orchestrator wait | `demo_mode.py:132` | `completion_event` set by wrong feature's QA report in concurrent bus | Track completion by correlation_id instead of generic Event |
 | Grok API key | `config.py:24` | `gsk_*` keys may not have access to latest models | Get new key from console.x.ai |
 | LLM keys unused | `config.py:23-24` | `OPENAI_API_KEY`/`ANTHROPIC_API_KEY` never consumed | Wire into LLM service |
 | Docker compose | `docker-compose.demo.yml:5` | `node:22-alpine` has no Python | Use `nikolaik/python-nodejs:python3.12-nodejs22-slim` |
@@ -46,9 +47,32 @@ If you see `ModuleNotFoundError: No module named 'agents'`, PYTHONPATH is missin
 | `feature_request` | user | SpecAgent | `title`, `request` |
 | `blueprint` | spec-agent | CodeGenAgent | `blueprint.feature`, `blueprint.files_to_create`, `blueprint.files_to_modify` |
 | `code_patch` | code-gen-agent | QAAgent | `feature`, `changed_files`, `diff_summary`, `status` |
-| `qa_report` | qa-agent | orchestrator | `feature`, `qa_signed_off`, `passed`, `failed` |
+| `qa_report` | qa-agent | deploy-agent | `feature`, `qa_signed_off`, `passed`, `failed` |
+| `docs_update` | docs-agent | orchestrator | `feature`, `docs_changed` |
+| `deployment_result` | deploy-agent | orchestrator | `feature`, `status` |
 
-Correlation IDs chain: `feature_request.id → blueprint → code_patch → qa_report`
+Correlation IDs chain: `feature_request.id → blueprint → code_patch → qa_report` (same UUID flows through all 5 agents)
+
+## Band Mode Architecture
+
+```
+Band Platform (WebSocket + REST)
+  │
+  ├── spec-agent  ─── BandAgentAdapter(SimpleAdapter) ──→ SpecAgent.handle_message()
+  ├── code-gen-agent ─ BandAgentAdapter(SimpleAdapter) ──→ CodeGenAgent.handle_message()
+  ├── qa-agent     ─── BandAgentAdapter(SimpleAdapter) ──→ QAAgent.handle_message()
+  ├── deploy-agent ─── BandAgentAdapter(SimpleAdapter) ──→ DeployAgent.handle_message()
+  └── docs-agent   ─── BandAgentAdapter(SimpleAdapter) ──→ DocsAgent.handle_message()
+```
+
+Per-agent credentials from `.env`:
+- `SPEC_AGENT_ID`, `SPEC_AGENT_API_KEY`
+- `CODE_GEN_AGENT_ID`, `CODE_GEN_AGENT_API_KEY`
+- `QA_AGENT_ID`, `QA_AGENT_API_KEY`
+- `DEPLOY_AGENT_ID`, `DEPLOY_AGENT_API_KEY`
+- `DOCS_AGENT_ID`, `DOCS_AGENT_API_KEY`
+
+Room created via REST (`thenvoi_rest.RestClient`) before WebSocket connections.
 
 ## Commands
 

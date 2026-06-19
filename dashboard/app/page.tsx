@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { AgentCard } from "@/components/AgentCard";
 import { PipelineTimeline } from "@/components/PipelineTimeline";
 import { LiveFeed } from "@/components/LiveFeed";
@@ -18,11 +18,11 @@ export type AgentEvent = {
 };
 
 const AGENTS = [
-  { id: "spec-agent", label: "Spec", color: "blue", icon: "🔍" },
-  { id: "code-gen-agent", label: "Code Gen", color: "purple", icon: "⚡" },
-  { id: "qa-agent", label: "QA", color: "green", icon: "🧪" },
-  { id: "deploy-agent", label: "Deploy", color: "red", icon: "🚀" },
-  { id: "docs-agent", label: "Docs", color: "amber", icon: "📝" },
+  { id: "spec-agent", label: "Spec", color: "blue", icon: "S" },
+  { id: "code-gen-agent", label: "Code Gen", color: "purple", icon: "C" },
+  { id: "qa-agent", label: "QA", color: "green", icon: "Q" },
+  { id: "deploy-agent", label: "Deploy", color: "red", icon: "D" },
+  { id: "docs-agent", label: "Docs", color: "amber", icon: "Dc" },
 ] as const;
 
 type DemoStep = {
@@ -35,27 +35,40 @@ type DemoStep = {
   status?: string;
 };
 
-const STAGE_LABELS: Record<string, string> = {
-  submitted: "Submitted",
-  spec: "Spec'ing",
-  coding: "Coding",
-  qa: "Testing",
-  deploy: "Deploying",
-  docs: "Documenting",
-};
-
 const AGENT_ORDER = ["spec-agent", "code-gen-agent", "qa-agent", "deploy-agent", "docs-agent"];
+
+type Toast = { id: number; message: string; type: "success" | "error" | "info" };
 
 export default function Home() {
   const [events, setEvents] = useState<AgentEvent[]>([]);
   const [demoRunning, setDemoRunning] = useState(false);
   const [demoStatus, setDemoStatus] = useState<string | null>(null);
   const [currentStep, setCurrentStep] = useState<DemoStep | null>(null);
+  const [selectedAgent, setSelectedAgent] = useState<string | null>(null);
+  const [toasts, setToasts] = useState<Toast[]>([]);
+  const [eventCount, setEventCount] = useState(0);
+  const toastCounter = useRef(0);
+  const prevEventCount = useRef(0);
+
+  const addToast = useCallback((message: string, type: Toast["type"] = "info") => {
+    const id = ++toastCounter.current;
+    setToasts((prev) => [...prev.slice(-4), { id, message, type }]);
+    setTimeout(() => {
+      setToasts((prev) => prev.filter((t) => t.id !== id));
+    }, 3000);
+  }, []);
 
   const fetchEvents = useCallback(() => {
     fetch("/api/events")
       .then((r) => r.json())
-      .then((d) => setEvents(d.data || []))
+      .then((d) => {
+        const list: AgentEvent[] = d.data || [];
+        setEvents(list);
+        if (list.length > prevEventCount.current) {
+          setEventCount(list.length);
+        }
+        prevEventCount.current = list.length;
+      })
       .catch(() => {});
   }, []);
 
@@ -79,6 +92,12 @@ export default function Home() {
     return () => clearInterval(interval);
   }, [demoRunning, fetchStep]);
 
+  useEffect(() => {
+    if (eventCount > 0 && eventCount % 5 === 0) {
+      addToast(`${eventCount} events recorded`, "info");
+    }
+  }, [eventCount, addToast]);
+
   const latestPerAgent = new Map<string, AgentEvent>();
   for (const e of events) {
     latestPerAgent.set(e.agentId, e);
@@ -96,7 +115,7 @@ export default function Home() {
 
   const recentFeed = events.slice(0, 50);
 
-  const runDemo = async () => {
+  const runDemo = useCallback(async () => {
     setDemoRunning(true);
     setDemoStatus("Starting demo...");
     try {
@@ -104,6 +123,7 @@ export default function Home() {
       const data = await res.json();
       if (data.ok) {
         setDemoStatus("Demo running...");
+        addToast("Demo started — 5 features in queue", "info");
         const poll = setInterval(async () => {
           fetchEvents();
           try {
@@ -114,6 +134,8 @@ export default function Home() {
               setDemoStatus(s.result || "Demo complete!");
               clearInterval(poll);
               fetchEvents();
+              const passed = s.result?.includes("successfully") || s.completed === s.total;
+              addToast(passed ? "Demo complete! All features processed." : "Demo finished with some failures", passed ? "success" : "error");
             }
           } catch {
             setDemoStatus("Status check failed (retrying...)");
@@ -122,12 +144,14 @@ export default function Home() {
       } else {
         setDemoRunning(false);
         setDemoStatus(data.error || "Failed to start");
+        addToast(data.error || "Failed to start demo", "error");
       }
     } catch (err) {
       setDemoRunning(false);
       setDemoStatus(`Failed: ${err instanceof Error ? err.message : "unknown error"}`);
+      addToast("Demo failed to start", "error");
     }
-  };
+  }, [fetchEvents, addToast]);
 
   const submitFeature = async (title: string, description: string) => {
     const res = await fetch("/api/demo/request", {
@@ -135,37 +159,58 @@ export default function Home() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ title, request: description }),
     });
+    if (res.ok) addToast(`Feature submitted: ${title}`, "success");
     return res.ok;
   };
 
-  return (
-    <div className="relative min-h-screen overflow-hidden">
-      {/* Background gradient orbs */}
-      <div className="fixed inset-0 -z-10">
-        <div className="absolute top-[-20%] left-[-10%] w-[60%] h-[60%] rounded-full bg-blue-500/10 blur-[120px] animate-float" />
-        <div className="absolute bottom-[-20%] right-[-10%] w-[60%] h-[60%] rounded-full bg-purple-500/10 blur-[120px] animate-float" style={{ animationDelay: "-3s" }} />
-        <div className="absolute top-[40%] left-[40%] w-[40%] h-[40%] rounded-full bg-pink-500/5 blur-[100px] animate-float" style={{ animationDelay: "-1.5s" }} />
-        {/* Grid pattern overlay */}
-        <div className="absolute inset-0 opacity-[0.03]" style={{ backgroundImage: `linear-gradient(rgba(255,255,255,0.1) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.1) 1px, transparent 1px)`, backgroundSize: '60px 60px' }} />
-      </div>
+  const currentAgentIdx = currentStep?.agent ? AGENT_ORDER.indexOf(currentStep.agent) : -1;
 
-      {/* Content */}
-      <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {/* Header */}
-        <header className="mb-10 text-center">
-          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full glass text-xs text-zinc-400 mb-4">
-            <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse-glow" />
-            Multi-Agent System v1.0
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if ((e.target as HTMLElement)?.tagName === "INPUT" || (e.target as HTMLElement)?.tagName === "TEXTAREA") return;
+      if (e.key === "r" || e.key === "R") {
+        if (!demoRunning) runDemo();
+      }
+      if (e.key >= "1" && e.key <= "5") {
+        const idx = parseInt(e.key) - 1;
+        if (idx < AGENTS.length) setSelectedAgent(selectedAgent === AGENTS[idx].id ? null : AGENTS[idx].id);
+      }
+      if (e.key === "Escape") setSelectedAgent(null);
+    };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, [demoRunning, runDemo, selectedAgent]);
+
+  return (
+    <div className="min-h-screen" style={{ background: "var(--canvas)" }}>
+      <div className="max-w-7xl mx-auto px-6 lg:px-8 py-6">
+        <header className="flex items-center justify-between mb-8 pb-4 hairline-bottom">
+          <div className="flex items-center gap-4">
+            <div
+              className="w-8 h-8 rounded-lg flex items-center justify-center text-sm font-semibold"
+              style={{ background: "var(--primary)", color: "#fff" }}
+            >
+              S
+            </div>
+            <div>
+              <h1 className="text-lg font-semibold" style={{ color: "var(--ink)" }}>
+                SaaS Feature Factory
+              </h1>
+              <p className="text-xs" style={{ color: "var(--ink-subtle)" }}>
+                Five autonomous AI agents
+              </p>
+            </div>
           </div>
-          <h1 className="text-4xl sm:text-5xl font-bold tracking-tight mb-3">
-            <span className="text-gradient">SaaS Feature Factory</span>
-          </h1>
-          <p className="text-zinc-500 text-sm sm:text-base max-w-xl mx-auto">
-            Five autonomous AI agents collaborate to spec, code, test, deploy, and document new features
-          </p>
+          <div className="flex items-center gap-3">
+            <span className="mono text-[10px] hidden sm:inline" style={{ color: "var(--ink-tertiary)" }}>
+              {events.length} events
+            </span>
+            <div className="badge badge-info">
+              v1.0
+            </div>
+          </div>
         </header>
 
-        {/* Feature Request + Demo Control */}
         <FeatureRequestForm
           onSubmit={submitFeature}
           onRunDemo={runDemo}
@@ -173,47 +218,49 @@ export default function Home() {
           demoStatus={demoStatus}
         />
 
-        {/* Live Progress Bar - shown during demo */}
         {demoRunning && currentStep?.active && (
-          <div className="glass rounded-xl p-5 mt-5 glow-green animate-slide-up">
-            <div className="flex items-center justify-between mb-3">
-              <div className="flex items-center gap-3">
-                <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse-glow" />
-                <span className="text-sm font-medium text-zinc-200">
-                  Processing: <span className="text-green-400">{currentStep.feature}</span>
+          <div className="card mt-5 animate-slide-up">
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-2">
+                <span className="w-1.5 h-1.5 rounded-full animate-pulse-dot" style={{ background: "var(--primary)" }} />
+                <span className="text-sm font-medium" style={{ color: "var(--ink-muted)" }}>
+                  Processing: <span style={{ color: "var(--primary)" }}>{currentStep.feature}</span>
                 </span>
               </div>
-              <span className="text-xs text-zinc-500">
-                Step {currentStep.feature_index! + 1} of {currentStep.total_features}
+              <span className="text-xs mono" style={{ color: "var(--ink-subtle)" }}>
+                {currentStep.feature_index! + 1} / {currentStep.total_features}
               </span>
             </div>
-            {/* Progress bar */}
-            <div className="h-2 rounded-full bg-white/5 overflow-hidden mb-4">
+            <div className="h-1.5 rounded-full overflow-hidden mb-4" style={{ background: "var(--surface-2)" }}>
               <div
-                className="h-full rounded-full bg-gradient-to-r from-green-500 to-emerald-400 transition-all duration-700"
-                style={{ width: `${((currentStep.feature_index! + 1) / currentStep.total_features!) * 100}%` }}
+                className="h-full rounded-full transition-all duration-700"
+                style={{
+                  width: `${((currentStep.feature_index! + 1) / currentStep.total_features!) * 100}%`,
+                  background: "var(--primary)",
+                }}
               />
             </div>
-            {/* Agent pipeline flow */}
-            <div className="flex items-center gap-1">
+            <div className="flex items-center gap-2">
               {AGENT_ORDER.map((aid, i) => {
                 const agent = AGENTS.find((a) => a.id === aid)!;
                 const isCurrent = currentStep.agent === aid;
-                const isDone = AGENT_ORDER.indexOf(currentStep.agent || "") > i;
+                const isDone = currentAgentIdx > i;
                 return (
                   <div key={aid} className="flex items-center gap-1 flex-1">
-                    <div className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs transition-all ${
-                      isCurrent ? "bg-green-500/15 text-green-300 border border-green-500/30" :
-                      isDone ? "bg-green-500/10 text-green-500" :
-                      "bg-white/[0.02] text-zinc-600"
-                    }`}>
+                    <div
+                      className={`flex items-center gap-1.5 px-2 py-1 rounded-md text-xs transition-all ${
+                        isCurrent ? "badge badge-info" : isDone ? "badge badge-success" : "badge badge-default"
+                      }`}
+                      style={isCurrent ? { border: "1px solid var(--primary)" } : {}}
+                    >
                       <span>{agent.icon}</span>
                       <span className="hidden sm:inline">{agent.label}</span>
-                      {isCurrent && <span className="w-1 h-1 rounded-full bg-green-500 animate-pulse-glow ml-1" />}
-                      {isDone && <span className="text-[10px] ml-1">✓</span>}
                     </div>
                     {i < AGENT_ORDER.length - 1 && (
-                      <div className={`h-px flex-1 ${isDone ? "bg-green-500/30" : "bg-white/5"}`} />
+                      <div
+                        className="h-px flex-1"
+                        style={{ background: isDone ? "var(--primary)" : "var(--hairline)" }}
+                      />
                     )}
                   </div>
                 );
@@ -222,57 +269,128 @@ export default function Home() {
           </div>
         )}
 
-        {/* Grid */}
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 mt-8">
-          {/* Agent Status - spans 5 cols */}
-          <div className="lg:col-span-5 glass rounded-xl p-5 glow-white animate-slide-up">
+        <div className="grid-bento mt-6">
+          <div className="card lg:col-span-5 animate-slide-up" style={{ animationDelay: "0s" }}>
             <div className="flex items-center justify-between mb-4">
-              <h2 className="text-sm font-semibold text-zinc-300 uppercase tracking-wider">Agent Status</h2>
-              <span className="text-xs text-zinc-600">{events.length} events</span>
+              <h2 className="text-xs font-semibold uppercase tracking-wider" style={{ color: "var(--ink-subtle)" }}>
+                Agent Status
+              </h2>
+              <div className="flex items-center gap-2">
+                {selectedAgent && (
+                  <button
+                    className="text-[10px] font-mono focus-ring"
+                    style={{ color: "var(--ink-tertiary)" }}
+                    onClick={() => setSelectedAgent(null)}
+                  >
+                    &larr; Clear
+                  </button>
+                )}
+                <span className="mono text-[10px]" style={{ color: "var(--ink-tertiary)" }}>
+                  {events.length} events
+                </span>
+              </div>
             </div>
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
               {AGENTS.map((agent) => (
-                <AgentCard key={agent.id} agent={agent} event={latestPerAgent.get(agent.id)} />
+                <AgentCard
+                  key={agent.id}
+                  agent={agent}
+                  event={latestPerAgent.get(agent.id)}
+                  allEvents={events}
+                  onSelect={setSelectedAgent}
+                  selected={selectedAgent === agent.id}
+                />
               ))}
             </div>
           </div>
 
-          {/* Pipeline Flow - spans 4 cols */}
-          <div className="lg:col-span-4 glass rounded-xl p-5 glow-white animate-slide-up" style={{ animationDelay: "0.1s" }}>
+          <div className="card lg:col-span-4 animate-slide-up" style={{ animationDelay: "0.05s" }}>
             <div className="flex items-center justify-between mb-4">
-              <h2 className="text-sm font-semibold text-zinc-300 uppercase tracking-wider">Pipeline Flow</h2>
-              <span className="text-xs text-zinc-600">{completedFeatures.length}/5</span>
+              <h2 className="text-xs font-semibold uppercase tracking-wider" style={{ color: "var(--ink-subtle)" }}>
+                Pipeline Flow
+              </h2>
+              <span className="text-xs" style={{ color: "var(--ink-subtle)" }}>
+                {completedFeatures.length}/5
+              </span>
             </div>
             <PipelineTimeline events={timelineEvents} />
           </div>
 
-          {/* Feature Queue - spans 3 cols */}
-          <div className="lg:col-span-3 glass rounded-xl p-5 glow-white animate-slide-up" style={{ animationDelay: "0.15s" }}>
+          <div className="card lg:col-span-3 animate-slide-up" style={{ animationDelay: "0.1s" }}>
             <div className="flex items-center justify-between mb-4">
-              <h2 className="text-sm font-semibold text-zinc-300 uppercase tracking-wider">Feature Queue</h2>
-              <span className={`text-xs px-2 py-0.5 rounded-full ${completedFeatures.length === 5 ? "bg-green-500/20 text-green-400" : "bg-zinc-800 text-zinc-500"}`}>
-                {completedFeatures.length}/5 done
+              <h2 className="text-xs font-semibold uppercase tracking-wider" style={{ color: "var(--ink-subtle)" }}>
+                Feature Queue
+              </h2>
+              <span
+                className={`badge ${completedFeatures.length === 5 ? "badge-success" : "badge-default"}`}
+              >
+                {completedFeatures.length}/5
               </span>
             </div>
-            <FeatureQueue features={completedFeatures} />
+            <FeatureQueue features={completedFeatures} events={events} />
           </div>
 
-          {/* Live Feed - full width */}
-          <div className="lg:col-span-12 glass rounded-xl p-5 glow-white animate-slide-up" style={{ animationDelay: "0.2s" }}>
+          <div className="card lg:col-span-12 animate-slide-up" style={{ animationDelay: "0.15s" }}>
             <div className="flex items-center justify-between mb-4">
-              <h2 className="text-sm font-semibold text-zinc-300 uppercase tracking-wider">Live Event Feed</h2>
+              <h2 className="text-xs font-semibold uppercase tracking-wider" style={{ color: "var(--ink-subtle)" }}>
+                Live Event Feed
+              </h2>
               {recentFeed.length > 0 && (
-                <span className="text-xs text-zinc-600">{recentFeed.length} events</span>
+                <span className="mono text-[10px]" style={{ color: "var(--ink-tertiary)" }}>
+                  {recentFeed.length} events
+                </span>
               )}
             </div>
             <LiveFeed events={recentFeed} />
           </div>
         </div>
 
-        {/* Footer */}
-        <footer className="mt-12 text-center text-xs text-zinc-700 pb-8">
-          Built with Next.js 15 · Tailwind CSS v4 · Python Agents · Express API
+        <footer className="mt-10 pb-6">
+          <div className="flex flex-col sm:flex-row items-center justify-between gap-2">
+            <p className="text-xs" style={{ color: "var(--ink-tertiary)" }}>
+              Next.js 15 · Tailwind CSS v4 · Python Agents · Express API
+            </p>
+            <div className="flex items-center gap-3 text-[10px] font-mono" style={{ color: "var(--ink-tertiary)" }}>
+              <span><kbd className="px-1 py-0.5 rounded" style={{ background: "var(--surface-2)", border: "1px solid var(--hairline)" }}>R</kbd> Run demo</span>
+              <span><kbd className="px-1 py-0.5 rounded" style={{ background: "var(--surface-2)", border: "1px solid var(--hairline)" }}>1-5</kbd> Select agent</span>
+              <span><kbd className="px-1 py-0.5 rounded" style={{ background: "var(--surface-2)", border: "1px solid var(--hairline)" }}>Esc</kbd> Clear</span>
+            </div>
+          </div>
         </footer>
+      </div>
+
+      <div
+        className="fixed top-4 right-4 z-50 flex flex-col gap-2 pointer-events-none"
+        style={{ maxWidth: 320 }}
+      >
+        {toasts.map((t) => (
+          <div
+            key={t.id}
+            className="animate-toast-in pointer-events-auto px-3 py-2 rounded-lg shadow-lg text-xs"
+            style={{
+              background: t.type === "success"
+                ? "rgba(39, 166, 68, 0.15)"
+                : t.type === "error"
+                  ? "rgba(229, 72, 77, 0.15)"
+                  : "rgba(94, 106, 210, 0.15)",
+              border: `1px solid ${
+                t.type === "success"
+                  ? "rgba(39, 166, 68, 0.3)"
+                  : t.type === "error"
+                    ? "rgba(229, 72, 77, 0.3)"
+                    : "rgba(94, 106, 210, 0.3)"
+              }`,
+              color: t.type === "success"
+                ? "var(--success)"
+                : t.type === "error"
+                  ? "var(--error)"
+                  : "var(--primary)",
+              backdropFilter: "blur(8px)",
+            }}
+          >
+            {t.message}
+          </div>
+        ))}
       </div>
     </div>
   );

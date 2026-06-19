@@ -3,7 +3,6 @@ import cors from 'cors';
 import helmet from 'helmet';
 import { tasksRouter } from './routes/tasks.js';
 import { usersRouter } from './routes/users.js';
-import { authRouter } from './routes/auth.js';
 import { preferencesRouter } from './routes/preferences.js';
 
 const app = express();
@@ -17,7 +16,6 @@ app.get('/health', (_req, res) => {
 });
 
 app.use('/api/tasks', tasksRouter);
-app.use('/api/auth', authRouter);
 app.use('/api/users', usersRouter);
 app.use('/api/preferences', preferencesRouter);
 

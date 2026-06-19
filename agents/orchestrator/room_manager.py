@@ -59,25 +59,46 @@ class RoomManager:
                     state["completed_features"].append(feature)
         return state
 
+    def _build_correlation_map(self) -> dict:
+        """Build feature_request.id → {blueprint, code_patch, qa_report} chain."""
+        corr = {}
+        reqs = [m for m in self.messages if m.msg_type == "feature_request"]
+        for req in reqs:
+            corr[req.id] = {"request": req, "blueprint": None, "code_patch": None, "qa_report": None}
+        for m in self.messages:
+            if m.correlation_id and m.correlation_id in corr:
+                if m.msg_type == "blueprint" and corr[m.correlation_id]["blueprint"] is None:
+                    corr[m.correlation_id]["blueprint"] = m
+                elif m.msg_type == "code_patch" and corr[m.correlation_id]["code_patch"] is None:
+                    corr[m.correlation_id]["code_patch"] = m
+                elif m.msg_type == "qa_report" and corr[m.correlation_id]["qa_report"] is None:
+                    corr[m.correlation_id]["qa_report"] = m
+        return corr
+
     def print_workflow(self):
         state = self.get_workflow_state()
+        corr = self._build_correlation_map()
         print(f"\n{'='*60}")
         print(f"WORKFLOW STATE - {len(state['completed_features'])} features completed")
         print(f"{'='*60}")
         for req in state["feature_requests"]:
             print(f"\n  FEATURE: {req['title']}")
             print(f"    Request ID: {req['id']}")
-            bps = [b for b in state["blueprints"] if b["id"].startswith(req["id"][:8])]
-            if bps:
-                bp = bps[0]
-                print(f"    Blueprint: {bp['feature']} ({bp['complexity']})")
-            patches = [p for p in state["code_patches"] if p["feature"] == req["title"]]
-            if patches:
-                p = patches[0]
-                print(f"    Code: {p['files']} files ({p['status']})")
-            reports = [r for r in state["qa_reports"] if r["feature"] == req["title"]]
-            if reports:
-                r = reports[0]
-                status = "PASSED" if r["signed_off"] else "FAILED"
+            chain = corr.get(req["id"], {})
+            bp = chain.get("blueprint")
+            if bp:
+                bp_content = bp.content.get("blueprint", {})
+                print(f"    Blueprint: {bp_content.get('feature', '')} ({bp_content.get('complexity', '')})")
+                print(f"    Correlation: {bp.correlation_id}")
+            patch = chain.get("code_patch")
+            if patch:
+                pc = patch.content
+                print(f"    Code: {len(pc.get('changed_files', []))} files ({pc.get('status', '')})")
+                print(f"    Correlation: {patch.correlation_id}")
+            qa = chain.get("qa_report")
+            if qa:
+                qc = qa.content
+                status = "PASSED" if qc.get("qa_signed_off") else "FAILED"
                 print(f"    QA: {status}")
+                print(f"    Correlation: {qa.correlation_id}")
         print(f"\n{'='*60}\n")

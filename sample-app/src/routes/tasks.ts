@@ -1,5 +1,6 @@
 import { Router, Request, Response } from 'express';
 import { exportTasksCSV } from '../services/exporter.js';
+import { exportTasksCSV } from '../services/exporter.js';
 import { db } from '../db/memory.js';
 
 const router = Router();
@@ -13,10 +14,8 @@ router.get('/', (req: Request, res: Response) => {
     return;
   }
 
-  const page = parseInt(req.query.page as string) || 1;
-  const limit = parseInt(req.query.limit as string) || 20;
-  const result = db.tasks.getAll(page, limit);
-  res.json(result);
+  const tasks = db.tasks.getAll();
+  res.json({ data: tasks, total: tasks.length });
 });
 
 router.get('/:id', (req: Request, res: Response) => {
@@ -49,6 +48,8 @@ router.put('/:id', (req: Request, res: Response) => {
   }
   res.json({ data: task });
 });
+
+router.get('/export/csv', exportTasksCSV);
 
 router.get('/export/csv', exportTasksCSV);
 

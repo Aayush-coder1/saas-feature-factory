@@ -37,21 +37,22 @@ async def cmd_request(args):
 
 async def cmd_band(args):
     print("[CLI] Starting Band mode - connecting agents to Band platform...")
-    print("[CLI] This requires valid Band credentials in .env")
-    print("[CLI] See .env.example for configuration details.")
 
-    if not config.band_api_key:
-        print("[CLI] ERROR: BAND_API_KEY not set. Configure .env file.")
-        print("[CLI] Copy .env.example to .env and fill in your Band credentials.")
+    if not config.has_band_agents:
+        print("[CLI] ERROR: Missing agent credentials in .env.")
+        print("[CLI] Required: SPEC_AGENT_ID, SPEC_AGENT_API_KEY, CODE_GEN_AGENT_ID, etc.")
         return
 
+    from band import Agent
+    from band.core.types import AdapterFeatures
+    from agents.core.band_adapter import BandAgentAdapter
     from agents.spec_agent.agent import SpecAgent
     from agents.code_gen_agent.agent import CodeGenAgent
     from agents.qa_agent.agent import QAAgent
     from agents.deploy_agent.agent import DeployAgent
     from agents.docs_agent.agent import DocsAgent
 
-    agents = [
+    agent_instances = [
         SpecAgent(),
         CodeGenAgent(),
         QAAgent(),
@@ -59,11 +60,72 @@ async def cmd_band(args):
         DocsAgent(),
     ]
 
-    tasks = [asyncio.create_task(agent.run()) for agent in agents]
-    print(f"[CLI] {len(agents)} agents connected to Band. Listening for feature requests...")
-    print(f"[CLI] Room: feature-factory | Project: {config.band_project_id or 'default'}")
-    print("[CLI] Submit feature requests via the Band dashboard.")
-    await asyncio.gather(*tasks)
+    # Set up the feature-factory room via REST
+    room_id = ""
+    try:
+        from thenvoi_rest import RestClient
+        from thenvoi_rest.types.chat_room_request import ChatRoomRequest
+        from thenvoi_rest.types.participant_request import ParticipantRequest
+
+        first = config.get_agent_credentials("spec-agent")
+        rest = RestClient(
+            base_url=config.band_rest_url.rstrip("/"),
+            api_key=first["api_key"],
+        )
+        room_resp = rest.agent_api_chats.create_agent_chat(
+            chat=ChatRoomRequest(task_id=None),
+        )
+        room_id = room_resp.data.id
+        print(f"[CLI] Created room: {room_id}")
+        for name, inst in [("spec-agent", agent_instances[0]),
+                            ("code-gen-agent", agent_instances[1]),
+                            ("qa-agent", agent_instances[2]),
+                            ("deploy-agent", agent_instances[3]),
+                            ("docs-agent", agent_instances[4])]:
+            creds = config.get_agent_credentials(name)
+            rest.agent_api_participants.add_agent_chat_participant(
+                chat_id=room_id,
+                participant=ParticipantRequest(
+                    participant_id=creds["agent_id"],
+                    role="member",
+                ),
+            )
+            print(f"[CLI] Added {name} to room")
+    except Exception as e:
+        print(f"[CLI] Room setup warning: {e}")
+        print("[CLI] Continuing — agents will connect but room must exist")
+
+    # Launch each agent as a Band agent with custom adapter
+    band_agents = []
+    tasks = []
+    for inst in agent_instances:
+        name = inst.name
+        creds = config.get_agent_credentials(name)
+        if not creds:
+            print(f"[CLI] WARNING: No credentials for {name}, skipping")
+            continue
+        adapter = BandAgentAdapter(inst)
+        band_agent = Agent.create(
+            adapter=adapter,
+            agent_id=creds["agent_id"],
+            api_key=creds["api_key"],
+            ws_url=config.band_ws_url,
+            rest_url=config.band_rest_url,
+        )
+        inst._band_adapter = adapter
+        inst._band_agent = band_agent
+        band_agents.append(band_agent)
+        tasks.append(asyncio.create_task(band_agent.run()))
+        print(f"[CLI] {name} connecting to Band...")
+
+    print(f"[CLI] {len(band_agents)} agents connected. Room: {room_id or config.band_project_id or 'feature-factory'}")
+    print("[CLI] Submit feature requests via Band dashboard.")
+    try:
+        await asyncio.gather(*tasks)
+    except asyncio.CancelledError:
+        print("[CLI] Shutting down...")
+        for ba in band_agents:
+            await ba.stop()
 
 
 def main():

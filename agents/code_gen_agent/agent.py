@@ -361,18 +361,9 @@ app.use('/api/preferences', preferencesRouter);""",
             files_content[path] = self.writer.read_file(path)
         llm_changes = await generate_code(blueprint, files_content)
         if llm_changes:
-            print(f"[Code Gen Agent] Using LLM-powered code generation")
-            for change in llm_changes:
-                action = change.get("action")
-                path = change.get("path")
-                content = change.get("content", "")
-                if action == "create":
-                    self.writer.write_file(path, content)
-                elif action == "modify":
-                    self.writer.write_file(path, content)
-        else:
-            print(f"[Code Gen Agent] Using template-based code generation")
-            self._generate_from_blueprint(blueprint)
+            print(f"[Code Gen Agent] LLM code gen available, using templates for stability")
+        print(f"[Code Gen Agent] Using template-based code generation")
+        self._generate_from_blueprint(blueprint)
 
         diff = self.writer.get_diff()
         changed_files = []

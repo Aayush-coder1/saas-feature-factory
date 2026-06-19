@@ -2,6 +2,7 @@
   "name": "saas-feature-factory",
   "version": "1.0.0",
   "private": true,
+  "type": "module",
   "description": "Multi-Agent SaaS Feature Factory - Band AI Hackathon",
   "scripts": {
     "demo": "node scripts/restore-sample-app.mjs && node scripts/run-demo.mjs",

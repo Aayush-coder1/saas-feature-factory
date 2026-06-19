@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useCallback, useRef } from "react";
 
 type Props = {
   onSubmit: (title: string, description: string) => Promise<boolean>;
@@ -9,90 +9,150 @@ type Props = {
   demoStatus: string | null;
 };
 
+const suggestions = [
+  { title: "Add Rate Limiting", desc: "Rate limit the API to 100 req/min per user" },
+  { title: "Add Webhook Support", desc: "Webhook notifications on task create/update" },
+  { title: "Add Search", desc: "Full-text search across all tasks and fields" },
+];
+
 export function FeatureRequestForm({ onSubmit, onRunDemo, demoRunning, demoStatus }: Props) {
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [submitting, setSubmitting] = useState(false);
-  const [result, setResult] = useState<string | null>(null);
+  const [result, setResult] = useState<{ ok: boolean; msg: string } | null>(null);
+  const titleRef = useRef<HTMLInputElement>(null);
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!title.trim()) return;
-    setSubmitting(true);
-    setResult(null);
-    const ok = await onSubmit(title, description);
-    setResult(ok ? "Feature submitted successfully!" : "Failed to submit");
-    if (ok) {
-      setTitle("");
-      setDescription("");
-    }
-    setSubmitting(false);
-    setTimeout(() => setResult(null), 3000);
-  };
+  const handleSubmit = useCallback(
+    async (e: React.FormEvent) => {
+      e.preventDefault();
+      if (!title.trim()) return;
+      setSubmitting(true);
+      setResult(null);
+      const ok = await onSubmit(title, description);
+      setResult({ ok, msg: ok ? "Feature submitted successfully!" : "Failed to submit" });
+      if (ok) {
+        setTitle("");
+        setDescription("");
+      }
+      setSubmitting(false);
+      setTimeout(() => setResult(null), 3000);
+    },
+    [title, description, onSubmit]
+  );
+
+  const applySuggestion = useCallback((s: { title: string; desc: string }) => {
+    setTitle(s.title);
+    setDescription(s.desc);
+    titleRef.current?.focus();
+  }, []);
+
+  const handleKeyDown = useCallback(
+    (e: React.KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
+        e.preventDefault();
+        handleSubmit(e as unknown as React.FormEvent);
+      }
+    },
+    [handleSubmit]
+  );
 
   return (
-    <div className="glass rounded-xl p-6 glow-white animate-slide-up">
+    <div className="card animate-slide-up">
       <div className="flex flex-col sm:flex-row gap-6">
-        {/* Feature request form */}
         <form onSubmit={handleSubmit} className="flex-1">
           <div className="flex items-center gap-2 mb-3">
-            <span className="text-lg">💡</span>
-            <h2 className="text-sm font-semibold text-zinc-300 uppercase tracking-wider">Request a Feature</h2>
+            <span className="text-xs font-semibold uppercase tracking-wider" style={{ color: "var(--ink-subtle)" }}>
+              Request a Feature
+            </span>
+            <kbd className="mono text-[9px] px-1 py-0.5 rounded" style={{ background: "var(--surface-2)", color: "var(--ink-tertiary)", border: "1px solid var(--hairline)" }}>
+              {navigator.platform?.includes("Mac") ? "⌘" : "Ctrl"}+Enter
+            </kbd>
           </div>
           <div className="flex flex-col sm:flex-row gap-3">
             <input
+              ref={titleRef}
               type="text"
               value={title}
               onChange={(e) => setTitle(e.target.value)}
+              onKeyDown={handleKeyDown}
               placeholder="e.g. Add Rate Limiting"
-              className="flex-1 px-4 py-2.5 rounded-lg bg-white/5 border border-white/10 text-sm text-zinc-200 placeholder-zinc-600 focus:outline-none focus:border-blue-500/50 focus:ring-1 focus:ring-blue-500/20 transition-all"
+              className="input-base flex-1"
               disabled={submitting}
             />
             <input
               type="text"
               value={description}
               onChange={(e) => setDescription(e.target.value)}
+              onKeyDown={handleKeyDown}
               placeholder="Brief description (optional)"
-              className="flex-[2] px-4 py-2.5 rounded-lg bg-white/5 border border-white/10 text-sm text-zinc-200 placeholder-zinc-600 focus:outline-none focus:border-blue-500/50 focus:ring-1 focus:ring-blue-500/20 transition-all"
+              className="input-base flex-[2]"
               disabled={submitting}
             />
-            <button
-              type="submit"
-              disabled={submitting || !title.trim()}
-              className="px-5 py-2.5 rounded-lg bg-gradient-to-r from-blue-600 to-purple-600 text-white text-sm font-medium hover:from-blue-500 hover:to-purple-500 disabled:opacity-40 disabled:cursor-not-allowed transition-all duration-200 shrink-0"
-            >
+            <button type="submit" disabled={submitting || !title.trim()} className="btn-primary shrink-0">
               {submitting ? "Submitting..." : "Submit →"}
             </button>
           </div>
+
           {result && (
-            <p className={`mt-2 text-xs ${result.includes("successfully") ? "text-green-400" : "text-red-400"}`}>
-              {result}
+            <p
+              className="mt-2 text-xs animate-fade-in"
+              style={{ color: result.ok ? "var(--success)" : "var(--error)" }}
+            >
+              {result.msg}
             </p>
           )}
+
+          <div className="flex flex-wrap gap-1.5 mt-2.5">
+            {suggestions.map((s, i) => (
+              <button
+                key={i}
+                type="button"
+                className="text-[10px] font-mono px-2 py-0.5 rounded-full transition-all focus-ring"
+                style={{
+                  background: "var(--surface-2)",
+                  color: "var(--ink-subtle)",
+                  border: "1px solid var(--hairline)",
+                }}
+                onClick={() => applySuggestion(s)}
+                onMouseEnter={(e) => {
+                  (e.currentTarget as HTMLElement).style.borderColor = "var(--hairline-strong)";
+                  (e.currentTarget as HTMLElement).style.color = "var(--ink-muted)";
+                }}
+                onMouseLeave={(e) => {
+                  (e.currentTarget as HTMLElement).style.borderColor = "var(--hairline)";
+                  (e.currentTarget as HTMLElement).style.color = "var(--ink-subtle)";
+                }}
+              >
+                {s.title}
+              </button>
+            ))}
+          </div>
         </form>
 
-        {/* Divider */}
         <div className="hidden sm:flex items-center">
-          <div className="w-px h-12 bg-white/10" />
+          <div className="w-px h-12" style={{ background: "var(--hairline)" }} />
         </div>
         <div className="flex sm:hidden items-center">
-          <div className="h-px w-full bg-white/10" />
+          <div className="h-px w-full" style={{ background: "var(--hairline)" }} />
         </div>
 
-        {/* Demo control */}
         <div className="sm:w-48 flex flex-col justify-center">
           <div className="flex items-center gap-2 mb-2">
-            <span className="text-lg">🎮</span>
-            <h2 className="text-sm font-semibold text-zinc-300 uppercase tracking-wider">Demo</h2>
+            <span className="text-xs font-semibold uppercase tracking-wider" style={{ color: "var(--ink-subtle)" }}>
+              Demo
+            </span>
+            <kbd className="mono text-[9px] px-1 py-0.5 rounded hidden sm:inline" style={{ background: "var(--surface-2)", color: "var(--ink-tertiary)", border: "1px solid var(--hairline)" }}>
+              R
+            </kbd>
           </div>
           <button
             onClick={onRunDemo}
             disabled={demoRunning}
-            className="w-full px-5 py-2.5 rounded-lg bg-gradient-to-r from-green-600 to-emerald-600 text-white text-sm font-medium hover:from-green-500 hover:to-emerald-500 disabled:opacity-40 disabled:cursor-not-allowed transition-all duration-200 flex items-center justify-center gap-2"
+            className="btn-primary w-full flex items-center justify-center gap-2"
           >
             {demoRunning ? (
               <>
-                <span className="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse-glow" />
+                <span className="w-1.5 h-1.5 rounded-full animate-pulse-dot" style={{ background: "#fff" }} />
                 Running...
               </>
             ) : (
@@ -100,7 +160,9 @@ export function FeatureRequestForm({ onSubmit, onRunDemo, demoRunning, demoStatu
             )}
           </button>
           {demoStatus && (
-            <p className="mt-1.5 text-xs text-zinc-500 text-center">{demoStatus}</p>
+            <p className="mt-1.5 text-xs text-center animate-fade-in" style={{ color: "var(--ink-subtle)" }}>
+              {demoStatus}
+            </p>
           )}
         </div>
       </div>
