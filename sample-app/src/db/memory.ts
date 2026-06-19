@@ -33,6 +33,12 @@ seed();
 export const db = {
   tasks: {
     getAll: (): Task[] => Array.from(tasks.values()),
+    search: (query: string): Task[] => {
+      const q = query.toLowerCase();
+      return Array.from(tasks.values()).filter(
+        t => t.title.toLowerCase().includes(q) || t.description.toLowerCase().includes(q)
+      );
+    },
     getByLabel: (label: string): Task[] => {
       return Array.from(tasks.values()).filter(t => t.labels?.includes(label));
     },

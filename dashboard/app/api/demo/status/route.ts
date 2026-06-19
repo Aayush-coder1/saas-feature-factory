@@ -1,18 +1,12 @@
 import { NextResponse } from "next/server";
-import { existsSync, readFileSync } from "fs";
-import { resolve } from "path";
-
-const PROJECT_ROOT = resolve(process.cwd(), "..");
-const STATE_FILE = resolve(PROJECT_ROOT, ".demo_state", "state.json");
+import { getDemoState } from "@/lib/demo-store";
 
 export async function GET() {
-  if (!existsSync(STATE_FILE)) {
+  const state = getDemoState();
+  if (!state.startedAt) {
     return NextResponse.json({ running: false, result: "No demo has been run yet" });
   }
-  try {
-    const state = JSON.parse(readFileSync(STATE_FILE, "utf-8"));
-    return NextResponse.json(state);
-  } catch {
-    return NextResponse.json({ running: false, result: "State file corrupted" });
-  }
+  return NextResponse.json(state);
 }
+
+export const runtime = "nodejs";

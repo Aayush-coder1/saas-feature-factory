@@ -1,18 +1,12 @@
 import { NextResponse } from "next/server";
-import { existsSync, readFileSync } from "fs";
-import { resolve } from "path";
-
-const PROJECT_ROOT = resolve(process.cwd(), "..");
-const STEP_FILE = resolve(PROJECT_ROOT, ".demo_state", "step.json");
+import { getStep } from "@/lib/demo-store";
 
 export async function GET() {
-  if (!existsSync(STEP_FILE)) {
+  const step = getStep();
+  if (!step.active) {
     return NextResponse.json({ active: false });
   }
-  try {
-    const step = JSON.parse(readFileSync(STEP_FILE, "utf-8"));
-    return NextResponse.json({ active: true, ...step });
-  } catch {
-    return NextResponse.json({ active: false });
-  }
+  return NextResponse.json(step);
 }
+
+export const runtime = "nodejs";
